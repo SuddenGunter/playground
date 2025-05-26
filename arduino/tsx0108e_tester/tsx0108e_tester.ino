@@ -10,13 +10,13 @@ void setup() {
 void loop() {
   digitalWrite(pinB1, HIGH);
   delay(1000);
-  Serial.print("A1 reads: ");
+  Serial.print("A1 reads when high: ");
   Serial.println(digitalRead(pinA1));   // expect HIGH (3.3 V)
   delay(1000);
 
   digitalWrite(pinB1, LOW);
   delay(1000);
-  Serial.print("A1 reads: ");
+  Serial.print("A1 reads when low: ");
   Serial.println(digitalRead(pinA1));   // expect LOW (0 V)
   delay(1000);
 }
