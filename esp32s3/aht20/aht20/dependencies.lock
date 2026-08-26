@@ -18,7 +18,7 @@ dependencies:
       type: service
     version: 2.0.0
   espressif/cmake_utilities:
-    component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
+    component_hash: 05165f30922b422b4b90c08845e6d449329b97370fbd06309803d8cb539d79e3
     dependencies:
     - name: idf
       require: private
@@ -26,28 +26,28 @@ dependencies:
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 0.5.3
+    version: 1.1.1
   espressif/i2c_bus:
-    component_hash: fe8f85b3859544fabb960d7bcec24278cd3c88e3f1777e8a2075b0aca202fd9f
+    component_hash: 483112c1619c54c38d0b734fb25f1678733267858a77b7af2f48cc7db6dbbd84
     dependencies:
     - name: espressif/cmake_utilities
       registry_url: https://components.espressif.com
       require: private
-      version: 0.*
+      version: '*'
     - name: idf
       require: private
       version: '>=4.0'
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.4.2
+    version: 1.5.2
   idf:
     source:
       type: idf
-    version: 6.0.0
+    version: 6.0.2
 direct_dependencies:
 - espressif/aht20
 - idf
 manifest_hash: 1fce4a368e595ecda5d68e49c96d680b067f87d6d011fed045b54cdd36f6d812
 target: esp32s3
-version: 2.0.0
+version: 3.0.0
