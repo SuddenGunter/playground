@@ -8,5 +8,5 @@
     "OPENOCD_USB_ADAPTER_LOCATION": "2-1.1"
   },
   "idf.flashType": "UART",
-  "idf.port": "/dev/tty.usbmodem21101"
+  "idf.port": "/dev/tty.usbmodem1101"
 }
