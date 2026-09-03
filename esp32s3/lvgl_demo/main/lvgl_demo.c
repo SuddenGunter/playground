@@ -126,8 +126,7 @@ void app_main(void)
     init_display(&io_handle, &panel_handle);
     init_backlight();
     
-    // Set initial brightness to 40% (adjust this value as needed)
-    set_backlight_brightness(75);
+    set_backlight_brightness(55);
 
     // 2. Start LVGL port
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
@@ -147,8 +146,8 @@ void app_main(void)
 
         .rotation = {
             .swap_xy = false,
-            .mirror_x = true,
-            .mirror_y = false,
+            .mirror_x = false,
+            .mirror_y = true,
         },
 
         .flags = {
@@ -173,18 +172,14 @@ void app_main(void)
     {
         lv_obj_t *screen = lv_screen_active();
 
-        /* Set screen background to Solarized Light base3 (#FDF6E3) */
-        lv_obj_set_style_bg_color(screen, lv_color_hex(0xfaf0d4), 0);
+        lv_obj_set_style_bg_color(screen, lv_color_hex(0xfcefca), 0);
         lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
 
-        /* Create "Hello World" label */
         lv_obj_t *label = lv_label_create(screen);
         lv_label_set_text(label, "Hello World");
 
-        /* Position in top-left corner with 16px padding */
         lv_obj_align(label, LV_ALIGN_TOP_LEFT, 16, 16);
 
-        /* Style text: Solarized Light base00 main text (#657B83) */
         lv_obj_set_style_text_color(label, lv_color_hex(0x657B83), 0);
         lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
 
