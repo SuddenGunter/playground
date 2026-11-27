@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
@@ -78,14 +79,11 @@ func (p *Postgres) NewDatabase(t *testing.T) string {
 
 	name := fmt.Sprintf("test_%d_%d", time.Now().UnixNano(), p.seq.Add(1))
 
-	if _, err := p.admin.Exec(t.Context(), "CREATE DATABASE "+pgx.Identifier{name}.Sanitize()); err != nil {
-		t.Fatalf("create database %s: %v", name, err)
-	}
+	_, err := p.admin.Exec(t.Context(), "CREATE DATABASE "+pgx.Identifier{name}.Sanitize())
+	require.NoError(t, err, "create database %s", name)
 
 	u, err := url.Parse(p.dsn)
-	if err != nil {
-		t.Fatalf("parse dsn: %v", err)
-	}
+	require.NoError(t, err, "parse dsn")
 
 	u.Path = "/" + name
 
@@ -97,9 +95,7 @@ func Pool(t *testing.T, dsn string) *pgxpool.Pool {
 	t.Helper()
 
 	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatalf("connect to %s: %v", dsn, err)
-	}
+	require.NoError(t, err, "connect to %s", dsn)
 
 	t.Cleanup(pool.Close)
 

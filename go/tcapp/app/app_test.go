@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/SuddenGunter/playground/go/tcapp/app"
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
@@ -52,10 +54,10 @@ func startApp(t *testing.T) testApp {
 	case <-a.Ready():
 	case err := <-runErr:
 		cancel()
-		t.Fatalf("app exited before becoming ready: %v", err)
+		require.FailNow(t, "app exited before becoming ready", "Run error: %v", err)
 	case <-time.After(30 * time.Second):
 		cancel()
-		t.Fatal("app did not become ready in time")
+		require.FailNow(t, "app did not become ready in time")
 	}
 
 	t.Cleanup(func() {
@@ -63,18 +65,14 @@ func startApp(t *testing.T) testApp {
 
 		select {
 		case err := <-runErr:
-			if err != nil {
-				t.Errorf("Run returned error on shutdown: %v", err)
-			}
+			assert.NoError(t, err, "Run returned error on shutdown")
 		case <-time.After(15 * time.Second): // longer than the app's internal shutdown timeout
-			t.Error("app did not shut down in time")
+			assert.Fail(t, "app did not shut down in time")
 		}
 	})
 
 	tcpAddr, ok := a.Addr().(*net.TCPAddr)
-	if !ok {
-		t.Fatalf("unexpected addr type %T", a.Addr())
-	}
+	require.True(t, ok, "unexpected addr type %T", a.Addr())
 
 	return testApp{
 		baseURL: fmt.Sprintf("http://127.0.0.1:%d", tcpAddr.Port),
@@ -88,9 +86,8 @@ func (ta testApp) seed(t *testing.T, rows ...[2]string) {
 	t.Helper()
 
 	for _, r := range rows {
-		if _, err := ta.db.Exec(t.Context(), "INSERT INTO mock_data (name, value) VALUES ($1, $2)", r[0], r[1]); err != nil {
-			t.Fatalf("seed %v: %v", r, err)
-		}
+		_, err := ta.db.Exec(t.Context(), "INSERT INTO mock_data (name, value) VALUES ($1, $2)", r[0], r[1])
+		require.NoError(t, err, "seed %v", r)
 	}
 }
 
@@ -104,25 +101,17 @@ func (ta testApp) call(t *testing.T, method, path, body string, out any) int {
 	}
 
 	req, err := http.NewRequestWithContext(t.Context(), method, ta.baseURL+path, r)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
+	require.NoError(t, err)
 
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("%s %s: %v", method, path, err)
-	}
+	require.NoError(t, err, "%s %s", method, path)
 	defer resp.Body.Close()
 
 	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("read body: %v", err)
-	}
+	require.NoError(t, err)
 
 	if out != nil {
-		if err := json.Unmarshal(raw, out); err != nil {
-			t.Fatalf("decode %s %s body %q: %v", method, path, raw, err)
-		}
+		require.NoError(t, json.Unmarshal(raw, out), "decode %s %s body %q", method, path, raw)
 	}
 
 	return resp.StatusCode
@@ -148,9 +137,7 @@ func TestApp_Health(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := ta.call(t, tt.method, tt.path, "", nil); got != tt.wantStatus {
-				t.Errorf("status = %d, want %d", got, tt.wantStatus)
-			}
+			assert.Equal(t, tt.wantStatus, ta.call(t, tt.method, tt.path, "", nil))
 		})
 	}
 }
@@ -165,47 +152,33 @@ func TestApp_QuerySeededData(t *testing.T) {
 		t.Parallel()
 
 		var items []mockdata.Item
-		if status := ta.call(t, http.MethodGet, "/mock-data", "", &items); status != http.StatusOK {
-			t.Fatalf("status = %d", status)
-		}
-
-		if got := names(items); got != "alpha,beta,gamma" {
-			t.Errorf("names = %s, want alpha,beta,gamma", got)
-		}
+		require.Equal(t, http.StatusOK, ta.call(t, http.MethodGet, "/mock-data", "", &items))
+		assert.Equal(t, []string{"alpha", "beta", "gamma"}, names(items))
 	})
 
 	t.Run("list with limit", func(t *testing.T) {
 		t.Parallel()
 
 		var items []mockdata.Item
-		if status := ta.call(t, http.MethodGet, "/mock-data?limit=2", "", &items); status != http.StatusOK {
-			t.Fatalf("status = %d", status)
-		}
-
-		if got := names(items); got != "alpha,beta" {
-			t.Errorf("names = %s, want alpha,beta", got)
-		}
+		require.Equal(t, http.StatusOK, ta.call(t, http.MethodGet, "/mock-data?limit=2", "", &items))
+		assert.Equal(t, []string{"alpha", "beta"}, names(items))
 	})
 
 	t.Run("get by id", func(t *testing.T) {
 		t.Parallel()
 
 		var item mockdata.Item
-		if status := ta.call(t, http.MethodGet, "/mock-data/2", "", &item); status != http.StatusOK {
-			t.Fatalf("status = %d", status)
-		}
-
-		if item.ID != 2 || item.Name != "beta" || item.Value != "2" || item.CreatedAt.IsZero() {
-			t.Errorf("unexpected item %+v", item)
-		}
+		require.Equal(t, http.StatusOK, ta.call(t, http.MethodGet, "/mock-data/2", "", &item))
+		assert.Equal(t, int64(2), item.ID)
+		assert.Equal(t, "beta", item.Name)
+		assert.Equal(t, "2", item.Value)
+		assert.False(t, item.CreatedAt.IsZero(), "created_at not set")
 	})
 
 	t.Run("get missing id", func(t *testing.T) {
 		t.Parallel()
 
-		if status := ta.call(t, http.MethodGet, "/mock-data/999", "", nil); status != http.StatusNotFound {
-			t.Errorf("status = %d, want 404", status)
-		}
+		assert.Equal(t, http.StatusNotFound, ta.call(t, http.MethodGet, "/mock-data/999", "", nil))
 	})
 }
 
@@ -216,43 +189,25 @@ func TestApp_CreateThenQuery(t *testing.T) {
 	ta.seed(t, [2]string{"seeded", "x"})
 
 	var created mockdata.Item
-	if status := ta.call(t, http.MethodPost, "/mock-data", `{"name":"fresh","value":"y"}`, &created); status != http.StatusCreated {
-		t.Fatalf("create status = %d, want 201", status)
-	}
-
-	if created.ID != 2 || created.Name != "fresh" || created.Value != "y" {
-		t.Fatalf("unexpected created item %+v", created)
-	}
+	require.Equal(t, http.StatusCreated, ta.call(t, http.MethodPost, "/mock-data", `{"name":"fresh","value":"y"}`, &created))
+	assert.Equal(t, int64(2), created.ID)
+	assert.Equal(t, "fresh", created.Name)
+	assert.Equal(t, "y", created.Value)
 
 	var fetched mockdata.Item
-	if status := ta.call(t, http.MethodGet, "/mock-data/"+strconv.FormatInt(created.ID, 10), "", &fetched); status != http.StatusOK {
-		t.Fatalf("get status = %d", status)
-	}
-
-	if fetched != created {
-		t.Errorf("fetched %+v, want %+v", fetched, created)
-	}
+	require.Equal(t, http.StatusOK, ta.call(t, http.MethodGet, "/mock-data/"+strconv.FormatInt(created.ID, 10), "", &fetched))
+	assert.Equal(t, created, fetched)
 
 	var items []mockdata.Item
-	ta.call(t, http.MethodGet, "/mock-data", "", &items)
-
-	if got := names(items); got != "seeded,fresh" {
-		t.Errorf("names = %s, want seeded,fresh", got)
-	}
+	require.Equal(t, http.StatusOK, ta.call(t, http.MethodGet, "/mock-data", "", &items))
+	assert.Equal(t, []string{"seeded", "fresh"}, names(items))
 
 	// The row really is in the database, not just in the response.
 	var count int
-	if err := ta.db.QueryRow(t.Context(), "SELECT count(*) FROM mock_data WHERE name = 'fresh'").Scan(&count); err != nil {
-		t.Fatalf("count: %v", err)
-	}
+	require.NoError(t, ta.db.QueryRow(t.Context(), "SELECT count(*) FROM mock_data WHERE name = 'fresh'").Scan(&count))
+	assert.Equal(t, 1, count)
 
-	if count != 1 {
-		t.Errorf("rows named fresh = %d, want 1", count)
-	}
-
-	if status := ta.call(t, http.MethodPost, "/mock-data", `{"value":"no name"}`, nil); status != http.StatusBadRequest {
-		t.Errorf("invalid create status = %d, want 400", status)
-	}
+	assert.Equal(t, http.StatusBadRequest, ta.call(t, http.MethodPost, "/mock-data", `{"value":"no name"}`, nil))
 }
 
 func TestApp_RunFailsOnBusyPort(t *testing.T) {
@@ -267,9 +222,9 @@ func TestApp_RunFailsOnBusyPort(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
-	if err := app.New(logger, cfg).Run(ctx); err == nil {
-		t.Fatal("expected Run to fail on a port that is already in use")
-	}
+	err := app.New(logger, cfg).Run(ctx)
+	require.Error(t, err, "expected Run to fail on a port that is already in use")
+	assert.ErrorContains(t, err, "listen")
 }
 
 func TestApp_RunFailsWithUnreachableDatabase(t *testing.T) {
@@ -281,16 +236,16 @@ func TestApp_RunFailsWithUnreachableDatabase(t *testing.T) {
 	}
 	logger := slog.New(slog.DiscardHandler)
 
-	if err := app.New(logger, cfg).Run(t.Context()); err == nil {
-		t.Fatal("expected Run to fail when the database is unreachable")
-	}
+	err := app.New(logger, cfg).Run(t.Context())
+	require.Error(t, err, "expected Run to fail when the database is unreachable")
+	assert.ErrorContains(t, err, "ping db")
 }
 
-func names(items []mockdata.Item) string {
+func names(items []mockdata.Item) []string {
 	out := make([]string, 0, len(items))
 	for _, it := range items {
 		out = append(out, it.Name)
 	}
 
-	return strings.Join(out, ",")
+	return out
 }

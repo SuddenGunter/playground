@@ -12,6 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	apimockdata "github.com/SuddenGunter/playground/go/tcapp/api/mockdata"
 	"github.com/SuddenGunter/playground/go/tcapp/mockdata"
 )
@@ -78,9 +81,7 @@ func do(t *testing.T, h http.Handler, method, target, body string) *httptest.Res
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), method, target, r))
 
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", ct)
-	}
+	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 
 	return rec
 }
@@ -119,22 +120,18 @@ func TestCreate(t *testing.T) {
 			store := &fakeStore{err: tt.storeErr}
 			rec := do(t, newServer(store), http.MethodPost, "/mock-data", tt.body)
 
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status = %d, want %d (body %s)", rec.Code, tt.wantStatus, rec.Body)
-			}
+			require.Equal(t, tt.wantStatus, rec.Code, "body: %s", rec.Body)
 
 			if tt.wantErrMsg != "" {
-				assertError(t, rec, tt.wantErrMsg)
+				assert.JSONEq(t, `{"error":"`+tt.wantErrMsg+`"}`, rec.Body.String())
 
 				return
 			}
 
 			var got mockdata.Item
 			decode(t, rec, &got)
-
-			if got.ID != 1 || got.Name != "n" {
-				t.Errorf("unexpected item %+v", got)
-			}
+			assert.Equal(t, int64(1), got.ID)
+			assert.Equal(t, "n", got.Name)
 		})
 	}
 }
@@ -165,9 +162,7 @@ func TestGet(t *testing.T) {
 			store.err = tt.storeErr
 			rec := do(t, newServer(store), http.MethodGet, tt.path, "")
 
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status = %d, want %d (body %s)", rec.Code, tt.wantStatus, rec.Body)
-			}
+			require.Equal(t, tt.wantStatus, rec.Code, "body: %s", rec.Body)
 
 			if tt.wantName == "" {
 				return
@@ -175,10 +170,7 @@ func TestGet(t *testing.T) {
 
 			var got mockdata.Item
 			decode(t, rec, &got)
-
-			if got.Name != tt.wantName {
-				t.Errorf("name = %q, want %q", got.Name, tt.wantName)
-			}
+			assert.Equal(t, tt.wantName, got.Name)
 		})
 	}
 }
@@ -210,28 +202,20 @@ func TestList(t *testing.T) {
 
 			rec := do(t, newServer(tt.store), http.MethodGet, "/mock-data"+tt.query, "")
 
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status = %d, want %d (body %s)", rec.Code, tt.wantStatus, rec.Body)
-			}
-
-			if tt.store.gotLimit != tt.wantLimit {
-				t.Errorf("store got limit %d, want %d", tt.store.gotLimit, tt.wantLimit)
-			}
+			require.Equal(t, tt.wantStatus, rec.Code, "body: %s", rec.Body)
+			assert.Equal(t, tt.wantLimit, tt.store.gotLimit, "limit passed to store")
 
 			if rec.Code != http.StatusOK {
 				return
 			}
 
-			if body := strings.TrimSpace(rec.Body.String()); tt.wantCount == 0 && body != "[]" {
-				t.Errorf("body = %s, want []", body)
+			if tt.wantCount == 0 {
+				assert.JSONEq(t, `[]`, rec.Body.String(), "empty list must render as [], not null")
 			}
 
 			var got []mockdata.Item
 			decode(t, rec, &got)
-
-			if len(got) != tt.wantCount {
-				t.Errorf("got %d items, want %d", len(got), tt.wantCount)
-			}
+			assert.Len(t, got, tt.wantCount)
 		})
 	}
 }
@@ -239,20 +223,5 @@ func TestList(t *testing.T) {
 func decode(t *testing.T, rec *httptest.ResponseRecorder, v any) {
 	t.Helper()
 
-	if err := json.Unmarshal(rec.Body.Bytes(), v); err != nil {
-		t.Fatalf("decode body %q: %v", rec.Body.String(), err)
-	}
-}
-
-func assertError(t *testing.T, rec *httptest.ResponseRecorder, want string) {
-	t.Helper()
-
-	var got struct {
-		Error string `json:"error"`
-	}
-	decode(t, rec, &got)
-
-	if got.Error != want {
-		t.Errorf("error = %q, want %q", got.Error, want)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), v), "decode body %q", rec.Body.String())
 }

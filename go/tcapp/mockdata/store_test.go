@@ -3,8 +3,10 @@
 package mockdata_test
 
 import (
-	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/SuddenGunter/playground/go/tcapp/internal/testenv"
 	"github.com/SuddenGunter/playground/go/tcapp/mockdata"
@@ -16,14 +18,9 @@ func newStore(t *testing.T) *mockdata.Store {
 
 	pool := testenv.Pool(t, pg.NewDatabase(t))
 
-	if err := mockdata.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-
+	require.NoError(t, mockdata.Migrate(t.Context(), pool), "migrate")
 	// Migrate must be safe to run on every startup.
-	if err := mockdata.Migrate(t.Context(), pool); err != nil {
-		t.Fatalf("second migrate: %v", err)
-	}
+	require.NoError(t, mockdata.Migrate(t.Context(), pool), "second migrate")
 
 	return mockdata.NewStore(pool)
 }
@@ -34,22 +31,16 @@ func TestStore_CreateAndGet(t *testing.T) {
 	s := newStore(t)
 
 	created, err := s.Create(t.Context(), "alpha", "1")
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-
-	if created.ID == 0 || created.CreatedAt.IsZero() {
-		t.Fatalf("generated fields not set: %+v", created)
-	}
+	require.NoError(t, err)
+	require.NotZero(t, created.ID, "id not generated")
+	require.False(t, created.CreatedAt.IsZero(), "created_at not set")
 
 	got, err := s.Get(t.Context(), created.ID)
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-
-	if !got.CreatedAt.Equal(created.CreatedAt) || got.ID != created.ID || got.Name != "alpha" || got.Value != "1" {
-		t.Errorf("got %+v, want %+v", got, created)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, got.ID)
+	assert.Equal(t, "alpha", got.Name)
+	assert.Equal(t, "1", got.Value)
+	assert.WithinDuration(t, created.CreatedAt, got.CreatedAt, 0)
 }
 
 func TestStore_GetNotFound(t *testing.T) {
@@ -57,9 +48,8 @@ func TestStore_GetNotFound(t *testing.T) {
 
 	s := newStore(t)
 
-	if _, err := s.Get(t.Context(), 42); !errors.Is(err, mockdata.ErrNotFound) {
-		t.Errorf("err = %v, want ErrNotFound", err)
-	}
+	_, err := s.Get(t.Context(), 42)
+	assert.ErrorIs(t, err, mockdata.ErrNotFound)
 }
 
 func TestStore_List(t *testing.T) {
@@ -68,18 +58,12 @@ func TestStore_List(t *testing.T) {
 	s := newStore(t)
 
 	empty, err := s.List(t.Context(), 10)
-	if err != nil {
-		t.Fatalf("list empty: %v", err)
-	}
-
-	if len(empty) != 0 {
-		t.Fatalf("expected no items, got %d", len(empty))
-	}
+	require.NoError(t, err)
+	require.Empty(t, empty)
 
 	for _, name := range []string{"a", "b", "c"} {
-		if _, err := s.Create(t.Context(), name, name); err != nil {
-			t.Fatalf("create %s: %v", name, err)
-		}
+		_, err := s.Create(t.Context(), name, name)
+		require.NoError(t, err, "create %s", name)
 	}
 
 	tests := []struct {
@@ -96,19 +80,14 @@ func TestStore_List(t *testing.T) {
 			t.Parallel()
 
 			items, err := s.List(t.Context(), tt.limit)
-			if err != nil {
-				t.Fatalf("list: %v", err)
+			require.NoError(t, err)
+
+			got := make([]string, 0, len(items))
+			for _, it := range items {
+				got = append(got, it.Name)
 			}
 
-			if len(items) != len(tt.want) {
-				t.Fatalf("got %d items, want %d", len(items), len(tt.want))
-			}
-
-			for i, it := range items {
-				if it.Name != tt.want[i] {
-					t.Errorf("items[%d].Name = %q, want %q", i, it.Name, tt.want[i])
-				}
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
