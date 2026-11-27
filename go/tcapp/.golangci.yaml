@@ -21,6 +21,7 @@ linters:
     - noctx          # HTTP requests / listeners without context
     - nolintlint     # keep //nolint directives honest
     - revive         # golint successor
+    - testifylint    # correct testify usage (require vs assert, Equal on errors, ...)
     - testpackage    # black-box tests (pkg_test)
     - unconvert
     - unparam

@@ -4,6 +4,9 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
 )
 
@@ -92,20 +95,13 @@ func TestLoadFrom(t *testing.T) {
 
 			got, err := config.LoadFrom(tt.environ)
 			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("expected error, got config %+v", got)
-				}
+				require.Error(t, err, "got config %+v", got)
 
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if got != tt.want {
-				t.Errorf("got %+v, want %+v", got, tt.want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
