@@ -8,9 +8,11 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/SuddenGunter/playground/go/tcapp/app"
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
@@ -37,10 +39,10 @@ func startApp(t *testing.T) int {
 	case <-a.Ready():
 	case err := <-runErr:
 		cancel()
-		t.Fatalf("app exited before becoming ready: %v", err)
+		require.FailNow(t, "app exited before becoming ready", "Run error: %v", err)
 	case <-time.After(5 * time.Second):
 		cancel()
-		t.Fatal("app did not become ready in time")
+		require.FailNow(t, "app did not become ready in time")
 	}
 
 	t.Cleanup(func() {
@@ -48,18 +50,14 @@ func startApp(t *testing.T) int {
 
 		select {
 		case err := <-runErr:
-			if err != nil {
-				t.Errorf("Run returned error on shutdown: %v", err)
-			}
+			assert.NoError(t, err, "Run returned error on shutdown")
 		case <-time.After(15 * time.Second): // longer than the app's internal shutdown timeout
-			t.Error("app did not shut down in time")
+			assert.Fail(t, "app did not shut down in time")
 		}
 	})
 
 	tcpAddr, ok := a.Addr().(*net.TCPAddr)
-	if !ok {
-		t.Fatalf("unexpected addr type %T", a.Addr())
-	}
+	require.True(t, ok, "unexpected addr type %T", a.Addr())
 
 	return tcpAddr.Port
 }
@@ -86,32 +84,21 @@ func TestApp(t *testing.T) {
 			t.Parallel()
 
 			req, err := http.NewRequestWithContext(t.Context(), tt.method, baseURL+tt.path, nil)
-			if err != nil {
-				t.Fatalf("new request: %v", err)
-			}
+			require.NoError(t, err)
 
 			resp, err := client.Do(req)
-			if err != nil {
-				t.Fatalf("do request: %v", err)
-			}
+			require.NoError(t, err)
 			defer resp.Body.Close()
 
-			if resp.StatusCode != tt.wantStatus {
-				t.Errorf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
-			}
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 
 			if tt.wantBody == "" {
 				return
 			}
 
 			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				t.Fatalf("read body: %v", err)
-			}
-
-			if got := strings.TrimSpace(string(body)); got != tt.wantBody {
-				t.Errorf("body = %q, want %q", got, tt.wantBody)
-			}
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.wantBody, string(body))
 		})
 	}
 }
@@ -122,9 +109,7 @@ func TestApp_RunFailsOnBusyPort(t *testing.T) {
 	port := startApp(t)
 
 	cfg, err := config.LoadFrom(map[string]string{"PORT": strconv.Itoa(port)})
-	if err != nil {
-		t.Fatalf("load config: %v", err)
-	}
+	require.NoError(t, err)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -132,7 +117,7 @@ func TestApp_RunFailsOnBusyPort(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	if err := app.New(logger, cfg).Run(ctx); err == nil {
-		t.Fatal("expected Run to fail on a port that is already in use")
-	}
+	err = app.New(logger, cfg).Run(ctx)
+	require.Error(t, err, "expected Run to fail on a port that is already in use")
+	assert.ErrorContains(t, err, "listen")
 }
