@@ -13,8 +13,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/SuddenGunter/playground/go/tcapp/api/health"
+	apimockdata "github.com/SuddenGunter/playground/go/tcapp/api/mockdata"
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
+	"github.com/SuddenGunter/playground/go/tcapp/mockdata"
 )
 
 // App is the service. Create it with New and start it with Run.
@@ -52,9 +56,21 @@ func (a *App) Addr() net.Addr {
 	}
 }
 
-// Run starts the app and blocks until ctx is cancelled or the server fails.
-// It returns nil on graceful shutdown.
+// Run connects to the database, applies the schema, starts the HTTP server and blocks
+// until ctx is cancelled or the server fails. It returns nil on graceful shutdown.
 func (a *App) Run(ctx context.Context) error {
+	pool, err := connectDB(ctx, a.cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	if err := mockdata.Migrate(ctx, pool); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+
+	a.log.Info("database ready")
+
 	var lc net.ListenConfig
 
 	ln, err := lc.Listen(ctx, "tcp", ":"+strconv.Itoa(a.cfg.Port))
@@ -63,7 +79,7 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	srv := &http.Server{
-		Handler:           a.routes(),
+		Handler:           a.routes(pool),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -107,9 +123,28 @@ func (a *App) Run(ctx context.Context) error {
 	return nil
 }
 
-func (a *App) routes() http.Handler {
+func (a *App) routes(pool *pgxpool.Pool) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", health.Handler())
+	apimockdata.New(a.log, mockdata.NewStore(pool)).Register(mux)
 
 	return mux
+}
+
+func connectDB(ctx context.Context, url string) (*pgxpool.Pool, error) {
+	pool, err := pgxpool.New(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("create db pool: %w", err)
+	}
+
+	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if err := pool.Ping(pingCtx); err != nil {
+		pool.Close()
+
+		return nil, fmt.Errorf("ping db: %w", err)
+	}
+
+	return pool, nil
 }

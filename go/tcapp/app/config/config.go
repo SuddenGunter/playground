@@ -14,6 +14,8 @@ import (
 type Config struct {
 	// Port the HTTP server listens on. Use 0 to pick a random free port (handy in tests).
 	Port int `env:"PORT,required"`
+	// DatabaseURL is a Postgres connection string, e.g. postgres://user:pass@host:5432/db?sslmode=disable.
+	DatabaseURL string `env:"DATABASE_URL,required"`
 	// LogLevel is one of debug, info, warn, error.
 	LogLevel slog.Level `env:"LOG_LEVEL" envDefault:"info"`
 	// ShutdownTimeout bounds how long graceful shutdown may take.

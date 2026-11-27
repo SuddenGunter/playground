@@ -5,6 +5,8 @@ dotenv: ["tcapp.env"]
 vars:
   BIN: ./bin/tcapp
   IMAGE: tcapp
+  # docker or podman; override with `task COMPOSE="docker compose" db:up`.
+  COMPOSE: '{{.COMPOSE | default "podman compose"}}'
 
 tasks:
   build:
@@ -13,16 +15,27 @@ tasks:
       - go build -trimpath -o {{.BIN}} .
 
   run:
-    desc: Run locally (reads tcapp.env if present; PORT defaults to 8080)
+    desc: Run locally against the compose database (reads tcapp.env if present)
     env:
       PORT: '{{.PORT | default "8080"}}'
+      DATABASE_URL: '{{.DATABASE_URL | default "postgres://tcapp:tcapp@127.0.0.1:5432/tcapp?sslmode=disable"}}'
     cmds:
       - go run .
 
   test:
-    desc: Run all tests with the race detector
+    desc: Run unit tests (no containers needed)
     cmds:
       - go test -race -count=1 ./...
+
+  test:integration:
+    desc: Run unit + integration tests (starts Postgres via testcontainers)
+    env:
+      # Defaults target rootless podman. With Docker, override DOCKER_HOST (or unset it in tcapp.env).
+      DOCKER_HOST: '{{.DOCKER_HOST | default (printf "unix://%s/podman/podman.sock" (env "XDG_RUNTIME_DIR"))}}'
+      # Rootless podman can't stop API-started containers cleanly; privileged Ryuk force-removes them.
+      TESTCONTAINERS_RYUK_CONTAINER_PRIVILEGED: '{{.TESTCONTAINERS_RYUK_CONTAINER_PRIVILEGED | default "true"}}'
+    cmds:
+      - go test -race -count=1 -tags integration ./...
 
   lint:
     desc: Run golangci-lint
@@ -38,6 +51,16 @@ tasks:
     desc: Tidy go.mod/go.sum
     cmds:
       - go mod tidy
+
+  db:up:
+    desc: Start the local Postgres
+    cmds:
+      - '{{.COMPOSE}} up -d --wait'
+
+  db:down:
+    desc: Stop the local Postgres (add -- -v to also drop its data)
+    cmds:
+      - '{{.COMPOSE}} down {{.CLI_ARGS}}'
 
   docker:
     desc: Build a multi-arch image (amd64 + arm64) with buildx

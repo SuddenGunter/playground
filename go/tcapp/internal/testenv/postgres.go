@@ -1,0 +1,107 @@
+// Package testenv provides shared helpers for integration tests.
+// It is imported only from _test.go files guarded by the "integration" build tag.
+package testenv
+
+import (
+	"context"
+	"fmt"
+	"net/url"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+)
+
+// PostgresImage is the image used for integration tests. Fully qualified so podman can resolve it.
+const PostgresImage = "docker.io/library/postgres:17-alpine"
+
+// Postgres is a running Postgres container shared by the tests of one package.
+type Postgres struct {
+	ctr   *postgres.PostgresContainer
+	dsn   string
+	admin *pgxpool.Pool
+	seq   atomic.Int64
+}
+
+// StartPostgres starts a Postgres container. Call it from TestMain and Close it when tests finish.
+func StartPostgres(ctx context.Context) (*Postgres, error) {
+	ctr, err := postgres.Run(ctx, PostgresImage,
+		postgres.WithDatabase("tcapp"),
+		postgres.WithUsername("tcapp"),
+		postgres.WithPassword("tcapp"),
+		postgres.BasicWaitStrategies(),
+	)
+	if err != nil {
+		if ctr != nil {
+			_ = testcontainers.TerminateContainer(ctr)
+		}
+
+		return nil, fmt.Errorf("start postgres container: %w", err)
+	}
+
+	dsn, err := ctr.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		_ = testcontainers.TerminateContainer(ctr)
+
+		return nil, fmt.Errorf("postgres connection string: %w", err)
+	}
+
+	admin, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		_ = testcontainers.TerminateContainer(ctr)
+
+		return nil, fmt.Errorf("connect to postgres: %w", err)
+	}
+
+	return &Postgres{ctr: ctr, dsn: dsn, admin: admin}, nil
+}
+
+// Close stops the container.
+func (p *Postgres) Close() error {
+	p.admin.Close()
+
+	if err := testcontainers.TerminateContainer(p.ctr); err != nil {
+		return fmt.Errorf("terminate postgres container: %w", err)
+	}
+
+	return nil
+}
+
+// NewDatabase creates an empty database for one test and returns its connection string.
+// Each test gets its own database, so parallel tests never see each other's rows.
+func (p *Postgres) NewDatabase(t *testing.T) string {
+	t.Helper()
+
+	name := fmt.Sprintf("test_%d_%d", time.Now().UnixNano(), p.seq.Add(1))
+
+	if _, err := p.admin.Exec(t.Context(), "CREATE DATABASE "+pgx.Identifier{name}.Sanitize()); err != nil {
+		t.Fatalf("create database %s: %v", name, err)
+	}
+
+	u, err := url.Parse(p.dsn)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+
+	u.Path = "/" + name
+
+	return u.String()
+}
+
+// Pool opens a connection pool to dsn that is closed when the test ends.
+func Pool(t *testing.T, dsn string) *pgxpool.Pool {
+	t.Helper()
+
+	pool, err := pgxpool.New(t.Context(), dsn)
+	if err != nil {
+		t.Fatalf("connect to %s: %v", dsn, err)
+	}
+
+	t.Cleanup(pool.Close)
+
+	return pool
+}
