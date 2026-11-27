@@ -4,7 +4,6 @@ dotenv: ["tcapp.env"]
 
 vars:
   BIN: ./bin/tcapp
-  IMAGE: tcapp
 
 tasks:
   build:
@@ -39,12 +38,15 @@ tasks:
     cmds:
       - go mod tidy
 
-  docker:
-    desc: Build a multi-arch image (amd64 + arm64) with buildx
-    cmds:
-      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE}} .
-
   docker:local:
     desc: Build an image for the host platform and load it into docker
     cmds:
-      - docker buildx build --load -t {{.IMAGE}} .
+      - docker buildx build --load -t {{.IMAGE | default "tcapp"}} .
+
+  docker:push:
+    desc: Build a multi-arch image (amd64 + arm64) and push it, e.g. task docker:push IMAGE=ghcr.io/you/tcapp:dev
+    # A multi-arch result can't be loaded into the local image store, so it has to go to a registry.
+    requires:
+      vars: [IMAGE]
+    cmds:
+      - docker buildx build --platform linux/amd64,linux/arm64 --push -t {{.IMAGE}} .

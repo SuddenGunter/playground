@@ -16,12 +16,15 @@ import (
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
 )
 
+// client fails requests quickly instead of hanging the test suite.
+var client = &http.Client{Timeout: 5 * time.Second}
+
 // startApp runs the real app on a random port and returns the port it bound.
 // The app is shut down (and its Run error checked) when the test ends.
 func startApp(t *testing.T) int {
 	t.Helper()
 
-	cfg := config.Config{Port: 0, LogLevel: slog.LevelDebug, ShutdownTimeout: 5 * time.Second}
+	cfg := config.Config{Port: 0, LogLevel: slog.LevelDebug}
 	logger := slog.New(slog.NewTextHandler(t.Output(), &slog.HandlerOptions{Level: cfg.LogLevel}))
 	a := app.New(logger, cfg)
 
@@ -48,7 +51,7 @@ func startApp(t *testing.T) int {
 			if err != nil {
 				t.Errorf("Run returned error on shutdown: %v", err)
 			}
-		case <-time.After(10 * time.Second):
+		case <-time.After(15 * time.Second): // longer than the app's internal shutdown timeout
 			t.Error("app did not shut down in time")
 		}
 	})
@@ -87,7 +90,7 @@ func TestApp(t *testing.T) {
 				t.Fatalf("new request: %v", err)
 			}
 
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := client.Do(req)
 			if err != nil {
 				t.Fatalf("do request: %v", err)
 			}
@@ -125,7 +128,11 @@ func TestApp_RunFailsOnBusyPort(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	if err := app.New(logger, cfg).Run(t.Context()); err == nil {
+	// Bounded so the test fails instead of hanging if Run ever binds the port.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	if err := app.New(logger, cfg).Run(ctx); err == nil {
 		t.Fatal("expected Run to fail on a port that is already in use")
 	}
 }

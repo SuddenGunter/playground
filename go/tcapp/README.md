@@ -14,7 +14,6 @@ Minimal Go HTTP service boilerplate.
 |--------------------|----------|---------|------------------------------------------|
 | `PORT`             | yes      | —       | HTTP listen port (`0` = random free port) |
 | `LOG_LEVEL`        | no       | `info`  | `debug`, `info`, `warn`, `error`          |
-| `SHUTDOWN_TIMEOUT` | no       | `10s`   | Graceful shutdown deadline (Go duration)  |
 
 For local runs, put overrides in `tcapp.env` (git-ignored); the Taskfile loads it automatically.
 
@@ -38,8 +37,8 @@ task test         # go test -race ./...
 task lint         # golangci-lint run
 task fmt          # gofumpt + goimports
 task build        # ./bin/tcapp
-task docker       # multi-arch image (linux/amd64 + linux/arm64) via buildx
 task docker:local # image for the host platform, loaded into docker
+task docker:push IMAGE=ghcr.io/you/tcapp:dev  # multi-arch (amd64 + arm64) build, pushed to a registry
 ```
 
 ## CI

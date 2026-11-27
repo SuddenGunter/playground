@@ -17,6 +17,9 @@ import (
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
 )
 
+// shutdownTimeout bounds how long graceful shutdown may take before connections are force-closed.
+const shutdownTimeout = 10 * time.Second
+
 // App is the service. Create it with New and start it with Run.
 type App struct {
 	log *slog.Logger
@@ -53,7 +56,7 @@ func (a *App) Addr() net.Addr {
 }
 
 // Run starts the app and blocks until ctx is cancelled or the server fails.
-// It returns nil on graceful shutdown.
+// It returns nil on graceful shutdown. Call it at most once per App.
 func (a *App) Run(ctx context.Context) error {
 	var lc net.ListenConfig
 
@@ -69,7 +72,9 @@ func (a *App) Run(ctx context.Context) error {
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		ErrorLog:          slog.NewLogLogger(a.log.Handler(), slog.LevelError),
-		BaseContext:       func(net.Listener) context.Context { return ctx },
+		// Request contexts must outlive ctx: cancelling ctx starts the shutdown, and Shutdown
+		// then waits for in-flight requests, which must not be cancelled out from under them.
+		BaseContext: func(net.Listener) context.Context { return context.WithoutCancel(ctx) },
 	}
 
 	a.addr = ln.Addr()
@@ -88,14 +93,21 @@ func (a *App) Run(ctx context.Context) error {
 	case <-ctx.Done():
 	}
 
-	a.log.Info("shutting down", slog.String("timeout", a.cfg.ShutdownTimeout.String()))
+	a.log.Info("shutting down", slog.String("timeout", shutdownTimeout.String()))
 
 	// ctx is already cancelled, so derive the shutdown deadline from a fresh context.
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.ShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown: %w", err)
+		// Drain didn't finish in time: drop remaining connections so Run doesn't return
+		// while handlers are still running.
+		errs := []error{err, srv.Close()}
+		if serr := <-serveErr; !errors.Is(serr, http.ErrServerClosed) {
+			errs = append(errs, serr)
+		}
+
+		return fmt.Errorf("shutdown: %w", errors.Join(errs...))
 	}
 
 	if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) {

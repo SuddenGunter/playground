@@ -3,7 +3,6 @@ package config_test
 import (
 	"log/slog"
 	"testing"
-	"time"
 
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
 )
@@ -21,31 +20,27 @@ func TestLoadFrom(t *testing.T) {
 			name:    "defaults applied",
 			environ: map[string]string{"PORT": "8080"},
 			want: config.Config{
-				Port:            8080,
-				LogLevel:        slog.LevelInfo,
-				ShutdownTimeout: 10 * time.Second,
+				Port:     8080,
+				LogLevel: slog.LevelInfo,
 			},
 		},
 		{
 			name: "all values set",
 			environ: map[string]string{
-				"PORT":             "9000",
-				"LOG_LEVEL":        "debug",
-				"SHUTDOWN_TIMEOUT": "3s",
+				"PORT":      "9000",
+				"LOG_LEVEL": "debug",
 			},
 			want: config.Config{
-				Port:            9000,
-				LogLevel:        slog.LevelDebug,
-				ShutdownTimeout: 3 * time.Second,
+				Port:     9000,
+				LogLevel: slog.LevelDebug,
 			},
 		},
 		{
 			name:    "port zero allowed",
 			environ: map[string]string{"PORT": "0"},
 			want: config.Config{
-				Port:            0,
-				LogLevel:        slog.LevelInfo,
-				ShutdownTimeout: 10 * time.Second,
+				Port:     0,
+				LogLevel: slog.LevelInfo,
 			},
 		},
 		{
@@ -69,8 +64,8 @@ func TestLoadFrom(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "invalid shutdown timeout",
-			environ: map[string]string{"PORT": "8080", "SHUTDOWN_TIMEOUT": "soon"},
+			name:    "empty port",
+			environ: map[string]string{"PORT": ""},
 			wantErr: true,
 		},
 	}
