@@ -30,13 +30,16 @@ type testApp struct {
 	db      *pgxpool.Pool // direct DB access for seeding and assertions
 }
 
+// client fails requests quickly instead of hanging the test suite.
+var client = &http.Client{Timeout: 5 * time.Second}
+
 // startApp creates a fresh database, runs the real app against it on a random port,
 // and stops it (checking that Run returned nil) when the test ends.
 func startApp(t *testing.T) testApp {
 	t.Helper()
 
 	dsn := pg.NewDatabase(t)
-	cfg := config.Config{Port: 0, DatabaseURL: dsn, LogLevel: slog.LevelDebug, ShutdownTimeout: 5 * time.Second}
+	cfg := config.Config{Port: 0, DatabaseURL: dsn, LogLevel: slog.LevelDebug}
 	logger := slog.New(slog.NewTextHandler(t.Output(), &slog.HandlerOptions{Level: cfg.LogLevel}))
 	a := app.New(logger, cfg)
 
@@ -63,7 +66,7 @@ func startApp(t *testing.T) testApp {
 			if err != nil {
 				t.Errorf("Run returned error on shutdown: %v", err)
 			}
-		case <-time.After(10 * time.Second):
+		case <-time.After(15 * time.Second): // longer than the app's internal shutdown timeout
 			t.Error("app did not shut down in time")
 		}
 	})
@@ -105,7 +108,7 @@ func (ta testApp) call(t *testing.T, method, path, body string, out any) int {
 		t.Fatalf("new request: %v", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
@@ -257,10 +260,14 @@ func TestApp_RunFailsOnBusyPort(t *testing.T) {
 
 	ta := startApp(t)
 
-	cfg := config.Config{Port: ta.port, DatabaseURL: pg.NewDatabase(t), ShutdownTimeout: time.Second}
+	cfg := config.Config{Port: ta.port, DatabaseURL: pg.NewDatabase(t)}
 	logger := slog.New(slog.DiscardHandler)
 
-	if err := app.New(logger, cfg).Run(t.Context()); err == nil {
+	// Bounded so the test fails instead of hanging if Run ever binds the port.
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	if err := app.New(logger, cfg).Run(ctx); err == nil {
 		t.Fatal("expected Run to fail on a port that is already in use")
 	}
 }
@@ -269,9 +276,8 @@ func TestApp_RunFailsWithUnreachableDatabase(t *testing.T) {
 	t.Parallel()
 
 	cfg := config.Config{
-		Port:            0,
-		DatabaseURL:     "postgres://u:p@127.0.0.1:1/db?sslmode=disable&connect_timeout=2",
-		ShutdownTimeout: time.Second,
+		Port:        0,
+		DatabaseURL: "postgres://u:p@127.0.0.1:1/db?sslmode=disable&connect_timeout=2",
 	}
 	logger := slog.New(slog.DiscardHandler)
 

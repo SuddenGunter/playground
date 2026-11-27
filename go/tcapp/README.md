@@ -29,7 +29,6 @@ internal/testenv/    testcontainers helpers for integration tests
 | `PORT`             | yes      | n/a     | HTTP listen port (`0` = random free port)        |
 | `DATABASE_URL`     | yes      | n/a     | Postgres connection string                      |
 | `LOG_LEVEL`        | no       | `info`  | `debug`, `info`, `warn`, `error`                 |
-| `SHUTDOWN_TIMEOUT` | no       | `10s`   | Graceful shutdown deadline (Go duration)         |
 
 For local runs, put overrides in `tcapp.env` (git-ignored); the Taskfile loads it automatically.
 
@@ -65,7 +64,8 @@ task test:integration  # unit + integration tests, Postgres via testcontainers
 task lint              # golangci-lint run (integration-tagged files included)
 task fmt               # gofumpt + goimports
 task build             # ./bin/tcapp
-task docker            # multi-arch image (linux/amd64 + linux/arm64) via buildx
+task docker:local      # image for the host platform, loaded into docker
+task docker:push IMAGE=ghcr.io/you/tcapp:dev  # multi-arch (amd64 + arm64) build, pushed to a registry
 ```
 
 ### Tests

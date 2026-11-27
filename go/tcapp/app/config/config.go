@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/caarlos0/env/v11"
 )
@@ -13,13 +12,11 @@ import (
 // Config holds all runtime configuration for the app.
 type Config struct {
 	// Port the HTTP server listens on. Use 0 to pick a random free port (handy in tests).
-	Port int `env:"PORT,required"`
+	Port int `env:"PORT,required,notEmpty"`
 	// DatabaseURL is a Postgres connection string, e.g. postgres://user:pass@host:5432/db?sslmode=disable.
-	DatabaseURL string `env:"DATABASE_URL,required"`
+	DatabaseURL string `env:"DATABASE_URL,required,notEmpty"`
 	// LogLevel is one of debug, info, warn, error.
 	LogLevel slog.Level `env:"LOG_LEVEL" envDefault:"info"`
-	// ShutdownTimeout bounds how long graceful shutdown may take.
-	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
 }
 
 // Load reads configuration from the process environment.

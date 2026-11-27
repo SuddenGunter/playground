@@ -3,7 +3,6 @@ package config_test
 import (
 	"log/slog"
 	"testing"
-	"time"
 
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
 )
@@ -23,35 +22,31 @@ func TestLoadFrom(t *testing.T) {
 			name:    "defaults applied",
 			environ: map[string]string{"PORT": "8080", "DATABASE_URL": dsn},
 			want: config.Config{
-				Port:            8080,
-				DatabaseURL:     dsn,
-				LogLevel:        slog.LevelInfo,
-				ShutdownTimeout: 10 * time.Second,
+				Port:        8080,
+				DatabaseURL: dsn,
+				LogLevel:    slog.LevelInfo,
 			},
 		},
 		{
 			name: "all values set",
 			environ: map[string]string{
-				"PORT":             "9000",
-				"DATABASE_URL":     dsn,
-				"LOG_LEVEL":        "debug",
-				"SHUTDOWN_TIMEOUT": "3s",
+				"PORT":         "9000",
+				"DATABASE_URL": dsn,
+				"LOG_LEVEL":    "debug",
 			},
 			want: config.Config{
-				Port:            9000,
-				DatabaseURL:     dsn,
-				LogLevel:        slog.LevelDebug,
-				ShutdownTimeout: 3 * time.Second,
+				Port:        9000,
+				DatabaseURL: dsn,
+				LogLevel:    slog.LevelDebug,
 			},
 		},
 		{
 			name:    "port zero allowed",
 			environ: map[string]string{"PORT": "0", "DATABASE_URL": dsn},
 			want: config.Config{
-				Port:            0,
-				DatabaseURL:     dsn,
-				LogLevel:        slog.LevelInfo,
-				ShutdownTimeout: 10 * time.Second,
+				Port:        0,
+				DatabaseURL: dsn,
+				LogLevel:    slog.LevelInfo,
 			},
 		},
 		{
@@ -80,8 +75,13 @@ func TestLoadFrom(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "invalid shutdown timeout",
-			environ: map[string]string{"PORT": "8080", "DATABASE_URL": dsn, "SHUTDOWN_TIMEOUT": "soon"},
+			name:    "empty port",
+			environ: map[string]string{"PORT": "", "DATABASE_URL": dsn},
+			wantErr: true,
+		},
+		{
+			name:    "empty database url",
+			environ: map[string]string{"PORT": "8080", "DATABASE_URL": ""},
 			wantErr: true,
 		},
 	}
