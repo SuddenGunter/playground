@@ -1,0 +1,52 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # "standard" = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - bodyclose      # unclosed HTTP response bodies
+    - copyloopvar    # pointless loop var copies (Go 1.22+)
+    - errorlint      # errors.Is/As instead of == and type switches
+    - errname        # ErrFoo / FooError naming
+    - gocritic       # broad bag of style/perf/bug checks
+    - gosec          # security issues
+    - misspell
+    - nilerr         # returning nil when err != nil
+    - noctx          # HTTP requests / listeners without context
+    - nolintlint     # keep //nolint directives honest
+    - revive         # golint successor
+    - testifylint    # correct testify usage (require vs assert, Equal on errors, ...)
+    - testpackage    # black-box tests (pkg_test)
+    - unconvert
+    - unparam
+    - usestdlibvars  # http.MethodGet instead of "GET", etc.
+    - wrapcheck      # wrap errors coming from other packages
+  settings:
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+  exclusions:
+    presets:
+      - common-false-positives
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - wrapcheck
+          - gosec
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/SuddenGunter/playground/go/tcapp
