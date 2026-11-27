@@ -40,11 +40,15 @@ For local runs, put overrides in `tcapp.env` (git-ignored); the Taskfile loads i
 | Method | Path               | Description                                           |
 |--------|--------------------|-------------------------------------------------------|
 | GET    | `/health`          | Liveness: `200 {"status":"ok"}` (doesn't touch the DB) |
-| POST   | `/mock-data`       | Create a row. Body `{"name": "...", "value": "..."}` (`name` required) → `201` |
+| POST   | `/mock-data`       | Create a row. Body `{"name": "...", "value": "..."}` (`name` required, ≤ 256 chars; `value` ≤ 4096 chars) → `201` |
 | GET    | `/mock-data`       | List rows ordered by id. `?limit=N` (1–500, default 50) |
 | GET    | `/mock-data/{id}`  | Get one row → `200`, or `404` if it doesn't exist      |
 
 Errors are JSON: `{"error": "..."}`.
+
+Timestamps are always returned in UTC. Length limits are enforced by `CHECK` constraints in the schema.
+The schema is applied with `CREATE TABLE IF NOT EXISTS`, so a local database created before a schema change
+keeps the old table. Reset it with `task db:down -- -v && task db:up`.
 
 ```sh
 curl -X POST localhost:8080/mock-data -d '{"name":"first","value":"hello"}'

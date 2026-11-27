@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+
+	"github.com/SuddenGunter/playground/go/tcapp/internal/db"
 )
 
 // PostgresImage is the image used for integration tests. Fully qualified so podman can resolve it.
@@ -89,11 +91,11 @@ func (p *Postgres) NewDatabase(t *testing.T) string {
 	return u.String()
 }
 
-// Pool opens a connection pool to dsn that is closed when the test ends.
+// Pool opens a connection pool to dsn, configured like the app's, that is closed when the test ends.
 func Pool(t *testing.T, dsn string) *pgxpool.Pool {
 	t.Helper()
 
-	pool, err := pgxpool.New(t.Context(), dsn)
+	pool, err := db.Connect(t.Context(), dsn)
 	require.NoError(t, err, "connect to %s", dsn)
 
 	t.Cleanup(pool.Close)

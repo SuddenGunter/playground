@@ -6,8 +6,19 @@ import (
 	"time"
 )
 
-// ErrNotFound is returned when the requested item does not exist.
-var ErrNotFound = errors.New("mock data not found")
+var (
+	// ErrNotFound is returned when the requested item does not exist.
+	ErrNotFound = errors.New("mock data not found")
+	// ErrInvalid is returned when an item violates a database constraint, e.g. a field is too long.
+	// The wrapping error's message says which rule was broken and is safe to show to clients.
+	ErrInvalid = errors.New("invalid mock data")
+)
+
+// Length limits enforced by the database schema, in characters.
+const (
+	MaxNameLength  = 256
+	MaxValueLength = 4096
+)
 
 // Item is a single row of the mock_data table.
 type Item struct {

@@ -19,6 +19,7 @@ import (
 	mockdataget "github.com/SuddenGunter/playground/go/tcapp/api/mockdata/get"
 	mockdatalist "github.com/SuddenGunter/playground/go/tcapp/api/mockdata/list"
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
+	"github.com/SuddenGunter/playground/go/tcapp/internal/db"
 	"github.com/SuddenGunter/playground/go/tcapp/mockdata"
 )
 
@@ -63,9 +64,9 @@ func (a *App) Addr() net.Addr {
 // until ctx is cancelled or the server fails. It returns nil on graceful shutdown.
 // Call it at most once per App.
 func (a *App) Run(ctx context.Context) error {
-	pool, err := connectDB(ctx, a.cfg.DatabaseURL)
+	pool, err := db.Connect(ctx, a.cfg.DatabaseURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("connect db: %w", err)
 	}
 	defer pool.Close()
 
@@ -146,22 +147,4 @@ func (a *App) routes(pool *pgxpool.Pool) http.Handler {
 	mux.Handle("GET /mock-data/{id}", mockdataget.New(a.log, store))
 
 	return mux
-}
-
-func connectDB(ctx context.Context, url string) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, url)
-	if err != nil {
-		return nil, fmt.Errorf("create db pool: %w", err)
-	}
-
-	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	if err := pool.Ping(pingCtx); err != nil {
-		pool.Close()
-
-		return nil, fmt.Errorf("ping db: %w", err)
-	}
-
-	return pool, nil
 }

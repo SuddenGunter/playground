@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -52,6 +53,11 @@ func TestHandler(t *testing.T) {
 		{name: "empty body", body: "", wantStatus: http.StatusBadRequest, wantErrMsg: "invalid JSON body"},
 		{name: "unknown field", body: `{"name":"n","extra":1}`, wantStatus: http.StatusBadRequest, wantErrMsg: "invalid JSON body"},
 		{name: "blank name", body: `{"name":"  ","value":"v"}`, wantStatus: http.StatusBadRequest, wantErrMsg: "name is required"},
+		{
+			name: "store rejects item", body: `{"name":"n"}`,
+			storeErr:   fmt.Errorf("%w: name must be at most 256 characters", mockdata.ErrInvalid),
+			wantStatus: http.StatusBadRequest, wantErrMsg: "invalid mock data: name must be at most 256 characters", wantStored: true,
+		},
 		{
 			name: "store error", body: `{"name":"n"}`, storeErr: errors.New("db is down"),
 			wantStatus: http.StatusInternalServerError, wantErrMsg: "internal error", wantStored: true,

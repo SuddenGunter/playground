@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -42,12 +43,36 @@ func (s *Store) Create(ctx context.Context, name, value string) (Item, error) {
 		return Item{}, fmt.Errorf("insert mock data: %w", err)
 	}
 
+	// Constraint violations surface here, when the row is read, not from Query.
 	item, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[Item])
 	if err != nil {
+		if invalid := constraintError(err); invalid != nil {
+			return Item{}, invalid
+		}
+
 		return Item{}, fmt.Errorf("insert mock data: %w", err)
 	}
 
 	return item, nil
+}
+
+const sqlStateCheckViolation = "23514"
+
+// constraintError maps a CHECK violation on mock_data to an ErrInvalid error, or returns nil.
+func constraintError(err error) error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != sqlStateCheckViolation {
+		return nil
+	}
+
+	switch pgErr.ConstraintName {
+	case "mock_data_name_length":
+		return fmt.Errorf("%w: name must be at most %d characters", ErrInvalid, MaxNameLength)
+	case "mock_data_value_length":
+		return fmt.Errorf("%w: value must be at most %d characters", ErrInvalid, MaxValueLength)
+	default:
+		return fmt.Errorf("%w: violates %s", ErrInvalid, pgErr.ConstraintName)
+	}
 }
 
 // Get returns the item with the given id, or ErrNotFound.

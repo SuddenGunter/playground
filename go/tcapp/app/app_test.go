@@ -208,6 +208,15 @@ func TestApp_CreateThenQuery(t *testing.T) {
 	assert.Equal(t, 1, count)
 
 	assert.Equal(t, http.StatusBadRequest, ta.call(t, http.MethodPost, "/mock-data", `{"value":"no name"}`, nil))
+
+	// Length limits are enforced by the database and reported as 400, not 500.
+	var errBody struct {
+		Error string `json:"error"`
+	}
+
+	tooLong := `{"name":"` + strings.Repeat("x", mockdata.MaxNameLength+1) + `"}`
+	require.Equal(t, http.StatusBadRequest, ta.call(t, http.MethodPost, "/mock-data", tooLong, &errBody))
+	assert.Equal(t, "invalid mock data: name must be at most 256 characters", errBody.Error)
 }
 
 func TestApp_RunFailsOnBusyPort(t *testing.T) {

@@ -4,6 +4,7 @@ package create
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -53,6 +54,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	item, err := h.store.Create(r.Context(), req.Name, req.Value)
+	if errors.Is(err, mockdata.ErrInvalid) {
+		respond.Error(w, http.StatusBadRequest, err.Error())
+
+		return
+	}
+
 	if err != nil {
 		respond.InternalError(w, r, h.log, err)
 

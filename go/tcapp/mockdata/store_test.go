@@ -3,6 +3,7 @@
 package mockdata_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -88,6 +89,60 @@ func TestStore_List(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestStore_TimestampsAreUTC(t *testing.T) {
+	t.Parallel()
+
+	s := newStore(t)
+
+	created, err := s.Create(t.Context(), "a", "b")
+	require.NoError(t, err)
+	assert.Equal(t, "UTC", created.CreatedAt.Location().String(), "Create")
+
+	got, err := s.Get(t.Context(), created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "UTC", got.CreatedAt.Location().String(), "Get")
+
+	items, err := s.List(t.Context(), 10)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "UTC", items[0].CreatedAt.Location().String(), "List")
+}
+
+func TestStore_LengthLimits(t *testing.T) {
+	t.Parallel()
+
+	s := newStore(t)
+
+	tests := []struct {
+		name      string
+		itemName  string
+		itemValue string
+		wantErr   string // empty = must succeed
+	}{
+		{name: "name at limit", itemName: strings.Repeat("n", mockdata.MaxNameLength)},
+		{name: "name limit counts characters, not bytes", itemName: strings.Repeat("é", mockdata.MaxNameLength)},
+		{name: "name too long", itemName: strings.Repeat("n", mockdata.MaxNameLength+1), wantErr: "name must be at most 256 characters"},
+		{name: "value at limit", itemName: "v", itemValue: strings.Repeat("v", mockdata.MaxValueLength)},
+		{name: "value too long", itemName: "v", itemValue: strings.Repeat("v", mockdata.MaxValueLength+1), wantErr: "value must be at most 4096 characters"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := s.Create(t.Context(), tt.itemName, tt.itemValue)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+
+				return
+			}
+
+			require.ErrorIs(t, err, mockdata.ErrInvalid)
+			assert.ErrorContains(t, err, tt.wantErr)
 		})
 	}
 }
