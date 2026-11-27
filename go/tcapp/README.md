@@ -14,10 +14,13 @@ Minimal Go HTTP service boilerplate backed by PostgreSQL.
 
 ```
 main.go              entrypoint
-app/                 wiring: DB pool, schema, HTTP server, graceful shutdown
+app/                 wiring: DB pool, schema, all routes (routes()), HTTP server, graceful shutdown
 app/config/          env config
 api/health/          GET /health
-api/mockdata/        mock data HTTP handlers (depend on a small Store interface)
+api/respond/         JSON response helpers shared by handlers
+api/mockdata/create/ POST /mock-data
+api/mockdata/get/    GET /mock-data/{id}
+api/mockdata/list/   GET /mock-data
 mockdata/            mock_data table: model, schema, pgx store
 internal/testenv/    testcontainers helpers for integration tests
 ```

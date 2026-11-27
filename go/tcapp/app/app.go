@@ -15,7 +15,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/SuddenGunter/playground/go/tcapp/api/health"
-	apimockdata "github.com/SuddenGunter/playground/go/tcapp/api/mockdata"
+	mockdatacreate "github.com/SuddenGunter/playground/go/tcapp/api/mockdata/create"
+	mockdataget "github.com/SuddenGunter/playground/go/tcapp/api/mockdata/get"
+	mockdatalist "github.com/SuddenGunter/playground/go/tcapp/api/mockdata/list"
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
 	"github.com/SuddenGunter/playground/go/tcapp/mockdata"
 )
@@ -136,8 +138,12 @@ func (a *App) Run(ctx context.Context) error {
 
 func (a *App) routes(pool *pgxpool.Pool) http.Handler {
 	mux := http.NewServeMux()
+	store := mockdata.NewStore(pool)
+
 	mux.Handle("GET /health", health.Handler())
-	apimockdata.New(a.log, mockdata.NewStore(pool)).Register(mux)
+	mux.Handle("POST /mock-data", mockdatacreate.New(a.log, store))
+	mux.Handle("GET /mock-data", mockdatalist.New(a.log, store))
+	mux.Handle("GET /mock-data/{id}", mockdataget.New(a.log, store))
 
 	return mux
 }
