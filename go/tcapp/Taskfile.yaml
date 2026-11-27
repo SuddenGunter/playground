@@ -1,0 +1,50 @@
+version: "3"
+
+dotenv: ["tcapp.env"]
+
+vars:
+  BIN: ./bin/tcapp
+  IMAGE: tcapp
+
+tasks:
+  build:
+    desc: Build the binary
+    cmds:
+      - go build -trimpath -o {{.BIN}} .
+
+  run:
+    desc: Run locally (reads tcapp.env if present; PORT defaults to 8080)
+    env:
+      PORT: '{{.PORT | default "8080"}}'
+    cmds:
+      - go run .
+
+  test:
+    desc: Run all tests with the race detector
+    cmds:
+      - go test -race -count=1 ./...
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run
+
+  fmt:
+    desc: Format code (gofumpt + goimports)
+    cmds:
+      - golangci-lint fmt
+
+  tidy:
+    desc: Tidy go.mod/go.sum
+    cmds:
+      - go mod tidy
+
+  docker:
+    desc: Build a multi-arch image (amd64 + arm64) with buildx
+    cmds:
+      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE}} .
+
+  docker:local:
+    desc: Build an image for the host platform and load it into docker
+    cmds:
+      - docker buildx build --load -t {{.IMAGE}} .

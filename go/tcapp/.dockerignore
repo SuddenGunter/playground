@@ -1,0 +1,6 @@
+.git
+bin/
+*.env
+Taskfile.yaml
+README.md
+.golangci.yaml
