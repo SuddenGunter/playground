@@ -22,7 +22,7 @@ const (
 	maxBodyBytes = 1 << 20
 )
 
-// Store is the storage the handlers need. *mockdata.Store implements it.
+// Store is the storage the handlers need.
 type Store interface {
 	Create(ctx context.Context, name, value string) (mockdata.Item, error)
 	Get(ctx context.Context, id int64) (mockdata.Item, error)

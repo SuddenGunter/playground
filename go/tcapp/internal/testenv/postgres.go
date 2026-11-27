@@ -1,5 +1,4 @@
 // Package testenv provides shared helpers for integration tests.
-// It is imported only from _test.go files guarded by the "integration" build tag.
 package testenv
 
 import (

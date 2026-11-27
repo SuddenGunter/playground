@@ -11,7 +11,7 @@ import (
 
 // Config holds all runtime configuration for the app.
 type Config struct {
-	// Port the HTTP server listens on. Use 0 to pick a random free port (handy in tests).
+	// Port the HTTP server listens on. Use 0 to pick a random free port.
 	Port int `env:"PORT,required,notEmpty"`
 	// DatabaseURL is a Postgres connection string, e.g. postgres://user:pass@host:5432/db?sslmode=disable.
 	DatabaseURL string `env:"DATABASE_URL,required,notEmpty"`
@@ -25,7 +25,6 @@ func Load() (Config, error) {
 }
 
 // LoadFrom reads configuration from the given environment map.
-// Tests use it to avoid touching the process environment.
 func LoadFrom(environ map[string]string) (Config, error) {
 	cfg, err := env.ParseAsWithOptions[Config](env.Options{Environment: environ})
 	if err != nil {

@@ -1,5 +1,4 @@
 // Package app wires dependencies together and runs the service.
-// It is kept separate from main so integration/e2e tests can run the real app in-process.
 package app
 
 import (
@@ -24,7 +23,7 @@ import (
 // shutdownTimeout bounds how long graceful shutdown may take before connections are force-closed.
 const shutdownTimeout = 10 * time.Second
 
-// App is the service. Create it with New and start it with Run.
+// App is the service.
 type App struct {
 	log *slog.Logger
 	cfg config.Config
@@ -34,7 +33,7 @@ type App struct {
 	addr      net.Addr
 }
 
-// New creates an App. It does not start anything.
+// New creates an App.
 func New(l *slog.Logger, cfg config.Config) *App {
 	return &App{
 		log:   l,
@@ -49,7 +48,6 @@ func (a *App) Ready() <-chan struct{} {
 }
 
 // Addr returns the address the server listens on, or nil if it is not listening yet.
-// Useful when the app is started with port 0.
 func (a *App) Addr() net.Addr {
 	select {
 	case <-a.ready:
