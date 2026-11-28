@@ -10,6 +10,8 @@ import (
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
 )
 
+const dsn = "postgres://u:p@localhost:5432/db"
+
 func TestLoadFrom(t *testing.T) {
 	t.Parallel()
 
@@ -21,54 +23,68 @@ func TestLoadFrom(t *testing.T) {
 	}{
 		{
 			name:    "defaults applied",
-			environ: map[string]string{"PORT": "8080"},
+			environ: map[string]string{"PORT": "8080", "DATABASE_URL": dsn},
 			want: config.Config{
-				Port:     8080,
-				LogLevel: slog.LevelInfo,
+				Port:        8080,
+				DatabaseURL: dsn,
+				LogLevel:    slog.LevelInfo,
 			},
 		},
 		{
 			name: "all values set",
 			environ: map[string]string{
-				"PORT":      "9000",
-				"LOG_LEVEL": "debug",
+				"PORT":         "9000",
+				"DATABASE_URL": dsn,
+				"LOG_LEVEL":    "debug",
 			},
 			want: config.Config{
-				Port:     9000,
-				LogLevel: slog.LevelDebug,
+				Port:        9000,
+				DatabaseURL: dsn,
+				LogLevel:    slog.LevelDebug,
 			},
 		},
 		{
 			name:    "port zero allowed",
-			environ: map[string]string{"PORT": "0"},
+			environ: map[string]string{"PORT": "0", "DATABASE_URL": dsn},
 			want: config.Config{
-				Port:     0,
-				LogLevel: slog.LevelInfo,
+				Port:        0,
+				DatabaseURL: dsn,
+				LogLevel:    slog.LevelInfo,
 			},
 		},
 		{
 			name:    "missing port",
-			environ: map[string]string{},
+			environ: map[string]string{"DATABASE_URL": dsn},
+			wantErr: true,
+		},
+		{
+			name:    "missing database url",
+			environ: map[string]string{"PORT": "8080"},
 			wantErr: true,
 		},
 		{
 			name:    "non-numeric port",
-			environ: map[string]string{"PORT": "http"},
+			environ: map[string]string{"PORT": "http", "DATABASE_URL": dsn},
 			wantErr: true,
 		},
 		{
 			name:    "port out of range",
-			environ: map[string]string{"PORT": "70000"},
+			environ: map[string]string{"PORT": "70000", "DATABASE_URL": dsn},
 			wantErr: true,
 		},
 		{
 			name:    "invalid log level",
-			environ: map[string]string{"PORT": "8080", "LOG_LEVEL": "loud"},
+			environ: map[string]string{"PORT": "8080", "DATABASE_URL": dsn, "LOG_LEVEL": "loud"},
 			wantErr: true,
 		},
 		{
 			name:    "empty port",
-			environ: map[string]string{"PORT": ""},
+			environ: map[string]string{"PORT": "", "DATABASE_URL": dsn},
+			wantErr: true,
+		},
+		{
+			name:    "empty database url",
+			environ: map[string]string{"PORT": "8080", "DATABASE_URL": ""},
 			wantErr: true,
 		},
 	}

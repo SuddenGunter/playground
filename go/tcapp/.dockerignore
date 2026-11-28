@@ -4,3 +4,4 @@ bin/
 Taskfile.yaml
 README.md
 .golangci.yaml
+docker-compose.yaml

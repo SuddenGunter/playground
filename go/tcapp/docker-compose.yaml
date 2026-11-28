@@ -1,0 +1,20 @@
+# Local development database. Start with `task db:up` (works with docker compose or podman compose).
+services:
+  postgres:
+    image: docker.io/library/postgres:17-alpine
+    environment:
+      POSTGRES_DB: tcapp
+      POSTGRES_USER: tcapp
+      POSTGRES_PASSWORD: tcapp
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tcapp -d tcapp"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:

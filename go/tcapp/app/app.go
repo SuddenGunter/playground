@@ -1,5 +1,4 @@
 // Package app wires dependencies together and runs the service.
-// It is kept separate from main so integration/e2e tests can run the real app in-process.
 package app
 
 import (
@@ -13,14 +12,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/SuddenGunter/playground/go/tcapp/api/health"
+	mockdatacreate "github.com/SuddenGunter/playground/go/tcapp/api/mockdata/create"
+	mockdataget "github.com/SuddenGunter/playground/go/tcapp/api/mockdata/get"
+	mockdatalist "github.com/SuddenGunter/playground/go/tcapp/api/mockdata/list"
 	"github.com/SuddenGunter/playground/go/tcapp/app/config"
+	"github.com/SuddenGunter/playground/go/tcapp/internal/db"
+	"github.com/SuddenGunter/playground/go/tcapp/mockdata"
 )
 
 // shutdownTimeout bounds how long graceful shutdown may take before connections are force-closed.
 const shutdownTimeout = 10 * time.Second
 
-// App is the service. Create it with New and start it with Run.
+// App is the service.
 type App struct {
 	log *slog.Logger
 	cfg config.Config
@@ -30,7 +36,7 @@ type App struct {
 	addr      net.Addr
 }
 
-// New creates an App. It does not start anything.
+// New creates an App.
 func New(l *slog.Logger, cfg config.Config) *App {
 	return &App{
 		log:   l,
@@ -45,7 +51,6 @@ func (a *App) Ready() <-chan struct{} {
 }
 
 // Addr returns the address the server listens on, or nil if it is not listening yet.
-// Useful when the app is started with port 0.
 func (a *App) Addr() net.Addr {
 	select {
 	case <-a.ready:
@@ -55,9 +60,22 @@ func (a *App) Addr() net.Addr {
 	}
 }
 
-// Run starts the app and blocks until ctx is cancelled or the server fails.
-// It returns nil on graceful shutdown. Call it at most once per App.
+// Run connects to the database, applies the schema, starts the HTTP server and blocks
+// until ctx is cancelled or the server fails. It returns nil on graceful shutdown.
+// Call it at most once per App.
 func (a *App) Run(ctx context.Context) error {
+	pool, err := db.Connect(ctx, a.cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("connect db: %w", err)
+	}
+	defer pool.Close()
+
+	if err := mockdata.Migrate(ctx, pool); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+
+	a.log.Info("database ready")
+
 	var lc net.ListenConfig
 
 	ln, err := lc.Listen(ctx, "tcp", ":"+strconv.Itoa(a.cfg.Port))
@@ -66,7 +84,7 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	srv := &http.Server{
-		Handler:           a.routes(),
+		Handler:           a.routes(pool),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -119,9 +137,14 @@ func (a *App) Run(ctx context.Context) error {
 	return nil
 }
 
-func (a *App) routes() http.Handler {
+func (a *App) routes(pool *pgxpool.Pool) http.Handler {
 	mux := http.NewServeMux()
+	store := mockdata.NewStore(pool)
+
 	mux.Handle("GET /health", health.Handler())
+	mux.Handle("POST /mock-data", mockdatacreate.New(a.log, store))
+	mux.Handle("GET /mock-data", mockdatalist.New(a.log, store))
+	mux.Handle("GET /mock-data/{id}", mockdataget.New(a.log, store))
 
 	return mux
 }
